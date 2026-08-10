@@ -24,8 +24,7 @@ You are a retrieval gate for a personal assistant's long-term memory.
 Given the user's message, decide if answering well requires the user's stored
 memories (facts about people, projects, preferences, or past events).
 
-Reply with ONLY this JSON, nothing else:
-{{"retrieve": true/false, "query": "<search keywords if true, else empty>", "reason": "<5 words>"}}
+Reply with ONLY one single-line JSON object and nothing else. Do not include markdown, explanations, or newlines. JSON schema: {{"retrieve": true/false, "query": "<search keywords if true, else empty>", "reason": "<5 words>"}}.
 
 General knowledge, math, small talk, or self-contained requests → false.
 Anything referencing the user's life, people, plans, or history → true.
