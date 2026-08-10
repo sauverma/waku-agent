@@ -14,11 +14,15 @@
 
 from __future__ import annotations
 
+import os
 import sys
 
 
 def main() -> None:
     args = sys.argv[1:]
+    if "--debug" in args or "-d" in args:
+        os.environ["WAKU_DEBUG"] = "1"
+        args = [a for a in args if a not in ("--debug", "-d")]
     if not args:
         from waku.gateway.cli import main as cli_main
 

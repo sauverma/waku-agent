@@ -72,6 +72,9 @@ class Settings:
     # gate when relevant. Without this cap a long thread (esp. the always-on
     # Telegram session) resends its whole history every turn until it explodes.
     history_turns: int = field(default_factory=lambda: int(os.getenv("WAKU_HISTORY_TURNS", "12")))
+    debug: bool = field(
+        default_factory=lambda: os.getenv("WAKU_DEBUG", "").lower() in ("1", "true", "yes", "on")
+    )
 
     # --- Memory
     # Consolidate (distill chats into durable facts) only after N new exchanges.

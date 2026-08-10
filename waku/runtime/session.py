@@ -12,6 +12,7 @@ away. What persists lives in waku/memory. Working memory =
 from __future__ import annotations
 
 from waku.config import Settings
+from waku.debug import debug_break
 
 DEFAULT_SOUL = """\
 You are Waku, a personal assistant running locally on your user's laptop.
@@ -61,6 +62,7 @@ class Session:
         self.history: list[dict] = []
 
     def build_system(self, user_message: str, notify=None) -> str:
+        debug_break()
         from datetime import datetime
 
         # The agent runs on your laptop, so it should know your laptop's clock.

@@ -38,6 +38,8 @@ def should_retrieve(
 ) -> tuple[bool, str, str]:
     """Returns (retrieve?, search_query, reason). Fails open: if the gate
     itself errors, we retrieve — a stale memory beats a lost one."""
+    from waku.debug import debug_break
+    debug_break()
     try:
         response = client.messages.create(
             model=small_model,
