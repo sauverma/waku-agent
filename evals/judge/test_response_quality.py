@@ -61,7 +61,9 @@ def test_scheduling_reply_is_helpful(tmp_path, geval_metrics):
     user_message = "Schedule a coffee with Alex next Tuesday at 9am"
     result = app.respond(user_message)
 
-    assert_test(LLMTestCase(input=user_message, actual_output=result.reply), [helpful])
+    x = LLMTestCase(input=user_message, actual_output=result.reply)
+
+    assert_test(x, [helpful], run_async=False)
 
 
 def test_reply_uses_remembered_preference(tmp_path, geval_metrics):
@@ -80,5 +82,5 @@ def test_reply_uses_remembered_preference(tmp_path, geval_metrics):
             actual_output=result.reply,
             retrieval_context=["Alex prefers morning meetings"],
         ),
-        [uses_memory],
+        [uses_memory], run_async=False
     )

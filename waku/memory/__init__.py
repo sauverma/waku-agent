@@ -17,7 +17,6 @@ from pathlib import Path
 import anthropic
 
 from waku.config import Settings
-from waku.debug import debug_break
 from waku.memory import consolidation, retrieval_gate
 from waku.memory.episodic.store import SqliteEpisodeStore
 from waku.memory.procedural.loader import SkillLoader
@@ -74,9 +73,8 @@ class Memory:
 
     # ---- retrieval (gated — see retrieval_gate.py for why)
     def gated_retrieve(self, message: str, notify=None) -> str:
-        debug_break()
         retrieve, query, reason = retrieval_gate.should_retrieve(
-            self.client, self.settings.small_model, message
+            self.client, self.settings.small_model, message, notify=notify
         )
         if notify:
             notify("gate", {"decision": "retrieve" if retrieve else "skip", "reason": reason})

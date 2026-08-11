@@ -24,7 +24,7 @@ from typing import Any
 
 import anthropic
 
-from waku.debug import debug_break
+from waku.debug import debug_enabled
 from waku.tools.registry import ToolRegistry
 
 # Observers let the gateway show tool calls live and let ops/tracing record
@@ -77,12 +77,12 @@ def run_loop(
     can_stream = stream and hasattr(client.messages, "stream")
 
     for iteration in range(1, max_iterations + 1):
-        print(f"[dim]loop iteration {iteration}[/dim]")
+        if debug_enabled():
+            print(f"[dim]loop iteration {iteration}[/dim]")
         result.iterations = iteration
 
         # ---- reason: one LLM call with the current working memory
         response = None
-        debug_break()
         if can_stream:
             try:
                 with client.messages.stream(
@@ -92,7 +92,8 @@ def run_loop(
                     for delta in s.text_stream:
                         notify("text", {"delta": delta})
                     response = s.get_final_message()
-            except Exception:
+            except Exception as exc:
+                notify("stream_fallback", {"reason": f"{type(exc).__name__}: {exc}"})
                 response = None  # any streaming hiccup → fall back to one call
         if response is None:
             response = client.messages.create(
@@ -105,12 +106,13 @@ def run_loop(
         notify("llm", {"iteration": iteration, "stop_reason": response.stop_reason,
                        "usage": {"in": response.usage.input_tokens, "out": response.usage.output_tokens}})
 
-        print(
-            f"[dim]loop iteration {iteration}\n"
-            f"messages:\n{_pretty_messages(messages)}\n"
-            f"content={pformat(response.content, width=100, sort_dicts=False)} "
-            f"stop_reason={response.stop_reason}[/dim]"
-        )
+        if debug_enabled():
+            print(
+                f"[dim]loop iteration {iteration}\n"
+                f"messages:\n{_pretty_messages(messages)}\n"
+                f"content={pformat(response.content, width=100, sort_dicts=False)} "
+                f"stop_reason={response.stop_reason}[/dim]"
+            )
 
         # the assistant's turn (text and/or tool requests) joins working memory
         messages.append({"role": "assistant", "content": response.content})
@@ -120,7 +122,6 @@ def run_loop(
         # ---- guardrail 1: no tool calls → the model is talking to the human
         if not tool_uses:
             result.reply = "".join(b.text for b in response.content if b.type == "text")
-            debug_break()
             return result
 
         # ---- act: execute each requested tool; observe: feed results back
@@ -136,8 +137,6 @@ def run_loop(
         messages.append({"role": "user", "content": tool_results})
 
     # ---- guardrail 2: ran out of iterations
-
-    debug_break()
 
     result.reply = "(I hit my iteration limit before finishing — try breaking the request into smaller steps.)"
     return result

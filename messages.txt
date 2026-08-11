@@ -1,0 +1,8 @@
+('{\n'
+ '  "steps": [\n'
+ '    "Check if the reply directly addresses the user\'s request.",\n'
+ '    "Verify if any action is confirmed with details like what, when, or who.",\n'
+ '    "Ensure the reply is concise and warm in tone.",\n'
+ '    "Compare the Input and Actual Output to confirm alignment on all above points."\n'
+ '  ]\n'
+ '}')

@@ -51,6 +51,48 @@ def test_a_no_skips_retrieval():
     assert reason == "general knowledge"
 
 
+def test_streamed_gate_emits_deltas_and_parses_final_json():
+    events = []
+
+    class Stream:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            return False
+
+        @property
+        def text_stream(self):
+            yield '{"retrieve": true, '
+            yield '"query": "Alex", '
+            yield '"reason": "personal"}'
+
+    class StreamingClient:
+        def __init__(self):
+            self.messages = SimpleNamespace(stream=self._stream, create=self._create)
+
+        def _stream(self, **_kw):
+            return Stream()
+
+        def _create(self, **_kw):
+            raise AssertionError("streaming gate should not use blocking create")
+
+    retrieve, query, reason = should_retrieve(
+        StreamingClient(),
+        "small-model",
+        "when am I meeting Alex?",
+        notify=lambda kind, ev: events.append((kind, ev)),
+    )
+
+    assert retrieve is True
+    assert query == "Alex"
+    assert reason == "personal"
+    assert [kind for kind, _ in events] == ["gate_text", "gate_text", "gate_text"]
+    assert "".join(ev["delta"] for _, ev in events) == (
+        '{"retrieve": true, "query": "Alex", "reason": "personal"}'
+    )
+
+
 def test_prose_around_the_json_is_tolerated():
     """Small models like to explain themselves. Slicing from the first { to the
     last } is deliberate — a chatty model must not cost the user their memory."""

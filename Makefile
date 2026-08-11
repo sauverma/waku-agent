@@ -4,12 +4,27 @@
 # ships with every Mac/Linux. Each target below is just the shell command
 # you'd otherwise type. `make run` = "run the python below", nothing more.
 #
-# PY picks the project venv automatically so you never need to remember
-# `source .venv/bin/activate` — both work, this is just fewer steps.
-PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python)
+# Let uv pick/create the project environment on every platform. The old
+# POSIX-only `[ -x .venv/bin/python ]` probe breaks under PowerShell/cmd.
+export UV_CACHE_DIR ?= $(CURDIR)/.uv-cache
+export UV_PYTHON_INSTALL_DIR ?= $(CURDIR)/.uv-python
+export UV_PROJECT_ENVIRONMENT ?= $(CURDIR)/.uv-make-venv
+export TMP ?= $(CURDIR)/.tmp
+export TEMP ?= $(CURDIR)/.tmp
+export TMPDIR ?= $(CURDIR)/.tmp
+export PYTEST_ADDOPTS ?= -p no:cacheprovider --basetemp=$(CURDIR)/.tmp/pytest
+export GIT_CONFIG_COUNT ?= 1
+export GIT_CONFIG_KEY_0 ?= safe.directory
+export GIT_CONFIG_VALUE_0 ?= $(CURDIR)
+UV := $(CURDIR)/.codex-tools/uv/bin/uv.exe
+PY := $(UV) run python
+PY_EVAL := $(UV) run --extra eval python
 
 .PHONY: run voice telegram discord brief dashboard trace eval eval-judge gate lint
 .PHONY: run voice telegram whatsapp brief dashboard trace eval eval-judge gate lint
+
+.tmp:
+	powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '.tmp' | Out-Null"
 
 run:            ## chat with Waku in the terminal
 	$(PY) -m waku
@@ -40,14 +55,14 @@ dashboard:      ## everything on one page — http://localhost:7777 (restart aft
 trace:          ## deep trace waterfalls (Phoenix) at http://localhost:6006
 	$(PY) -m phoenix.server.main serve
 
-eval:           ## deterministic evals (0/1, no judge involved)
-	$(PY) -m pytest -q evals/deterministic
+eval: .tmp      ## deterministic evals (0/1, no judge involved)
+	$(PY_EVAL) -m pytest -q evals/deterministic
 
-eval-judge:     ## LLM-as-judge evals (scored %, needs an API key)
-	$(PY) -m pytest -q evals/judge
+eval-judge: .tmp ## LLM-as-judge evals (scored %, needs an API key)
+	$(PY_EVAL) -m pytest -q evals/judge
 
-gate:           ## the release gate: deterministic must pass, judge must clear threshold
-	$(PY) -m waku.ops.release_gate
+gate: .tmp      ## the release gate: deterministic must pass, judge must clear threshold
+	$(PY_EVAL) -m waku.ops.release_gate
 
 shootout:       ## same tasks, different brains: make shootout RUNS="kimi:kimi-k3 anthropic:claude-opus-4-8"
 	$(PY) scripts/shootout.py $(RUNS)

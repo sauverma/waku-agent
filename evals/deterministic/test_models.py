@@ -8,8 +8,13 @@ def test_xai_grok_provider_uses_expected_key_endpoint_and_models(monkeypatch, tm
     captured = {}
 
     class StubOpenAICompatClient:
-        def __init__(self, *, api_key, base_url, timeout):
-            captured.update(api_key=api_key, base_url=base_url, timeout=timeout)
+        def __init__(self, *, api_key, base_url, timeout, default_query=None):
+            captured.update(
+                api_key=api_key,
+                base_url=base_url,
+                timeout=timeout,
+                default_query=default_query,
+            )
 
     monkeypatch.setenv("XAI_API_KEY", "test-xai-key")
     monkeypatch.setattr(models, "OpenAICompatClient", StubOpenAICompatClient)
@@ -21,6 +26,7 @@ def test_xai_grok_provider_uses_expected_key_endpoint_and_models(monkeypatch, tm
     assert isinstance(client, StubOpenAICompatClient)
     assert captured["api_key"] == "test-xai-key"
     assert captured["base_url"] == "https://api.x.ai/v1"
+    assert captured["default_query"] is None
     assert settings.model == "grok-4"
 
 
@@ -62,8 +68,13 @@ def test_deepseek_provider_uses_expected_key_endpoint_and_models(monkeypatch, tm
     captured = {}
 
     class StubOpenAICompatClient:
-        def __init__(self, *, api_key, base_url, timeout):
-            captured.update(api_key=api_key, base_url=base_url, timeout=timeout)
+        def __init__(self, *, api_key, base_url, timeout, default_query=None):
+            captured.update(
+                api_key=api_key,
+                base_url=base_url,
+                timeout=timeout,
+                default_query=default_query,
+            )
 
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-deepseek-key")
     monkeypatch.setattr(models, "OpenAICompatClient", StubOpenAICompatClient)
@@ -81,8 +92,40 @@ def test_deepseek_provider_uses_expected_key_endpoint_and_models(monkeypatch, tm
     assert isinstance(client, StubOpenAICompatClient)
     assert captured["api_key"] == "test-deepseek-key"
     assert captured["base_url"] == "https://api.deepseek.com"
+    assert captured["default_query"] is None
     assert settings.model == "deepseek-v4-pro"
     assert settings.small_model == "deepseek-v4-pro"
+
+
+def test_custom_openai_endpoint_can_pass_token_as_query_param(monkeypatch, tmp_path):
+    captured = {}
+
+    class StubOpenAICompatClient:
+        def __init__(self, *, api_key, base_url, timeout, default_query=None):
+            captured.update(
+                api_key=api_key,
+                base_url=base_url,
+                timeout=timeout,
+                default_query=default_query,
+            )
+
+    monkeypatch.setenv("WAKU_BASE_QUERY_TOKEN", "test-query-token")
+    monkeypatch.setattr(models, "OpenAICompatClient", StubOpenAICompatClient)
+    settings = Settings(
+        provider="openai",
+        api_key="dummy",
+        base_url="http://115.246.55.149:40660/v1",
+        model="qwen3.5-9B",
+        small_model="qwen3.5-9B",
+        home=tmp_path,
+    )
+
+    client = models.get_client(settings)
+
+    assert isinstance(client, StubOpenAICompatClient)
+    assert captured["api_key"] == "dummy"
+    assert captured["base_url"] == "http://115.246.55.149:40660/v1"
+    assert captured["default_query"] == {"token": "test-query-token"}
 
 
 def test_minimax_provider_uses_expected_key_endpoint_and_models(monkeypatch, tmp_path):

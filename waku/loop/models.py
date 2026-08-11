@@ -191,7 +191,14 @@ def get_client(settings: Settings):
         if base_url:
             kwargs["base_url"] = base_url
         return anthropic.Anthropic(**kwargs)
-    return OpenAICompatClient(api_key=api_key, base_url=base_url, timeout=timeout)
+    query_token = os.getenv("WAKU_BASE_QUERY_TOKEN", "").strip()
+    default_query = {"token": query_token} if query_token else None
+    return OpenAICompatClient(
+        api_key=api_key,
+        base_url=base_url,
+        timeout=timeout,
+        default_query=default_query,
+    )
 
 
 class OpenAICompatClient:
@@ -200,10 +207,14 @@ class OpenAICompatClient:
     between the two wire formats — worth reading once.
     """
 
-    def __init__(self, api_key: str, base_url: str | None = None, timeout: float = 120.0):
+    def __init__(self, api_key: str, base_url: str | None = None,
+                 timeout: float = 120.0, default_query: dict | None = None):
         import openai
 
-        self._client = openai.OpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
+        kwargs = {"api_key": api_key, "base_url": base_url, "timeout": timeout}
+        if default_query:
+            kwargs["default_query"] = default_query
+        self._client = openai.OpenAI(**kwargs)
         self.messages = SimpleNamespace(create=self._create, stream=self._stream)
 
     def _to_openai(self, *, model, messages, max_tokens, system=None, tools=None) -> dict:
@@ -331,8 +342,14 @@ class _OpenAIStream:
 
     @property
     def text_stream(self):
-        stream = self._client._call(
-            self._kwargs, stream=True, stream_options={"include_usage": True})
+        try:
+            stream = self._client._call(
+                self._kwargs, stream=True, stream_options={"include_usage": True})
+        except Exception as exc:
+            msg = str(exc).lower()
+            if "stream_options" not in msg and "stream options" not in msg:
+                raise
+            stream = self._client._call(self._kwargs, stream=True)
         for chunk in stream:
             if getattr(chunk, "usage", None):
                 self._usage = chunk.usage

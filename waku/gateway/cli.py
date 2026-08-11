@@ -1,8 +1,8 @@
-"""CLI gateway — the zero-setup way to talk to your Waku.
+"""CLI gateway: the zero-setup way to talk to your Waku.
 
-The Gateway Interface box: a gateway only moves text in and out; everything
-interesting happens in the loop. The Telegram gateway is the same ~60 lines
-with polling instead of input().
+A gateway only moves text in and out; everything interesting happens in the
+loop. The CLI streams gate diagnostics and assistant text live, then prints the
+final response after the turn completes.
 """
 
 from __future__ import annotations
@@ -16,6 +16,11 @@ from rich.text import Text
 from waku.app import Waku
 
 console = Console()
+_stream_state = {"gate_started": False, "reply_started": False}
+
+
+def _flush() -> None:
+    console.file.flush()
 
 
 def _memory_snapshot(conn: sqlite3.Connection) -> str:
@@ -42,28 +47,66 @@ def _memory_snapshot(conn: sqlite3.Connection) -> str:
     return "\n".join(lines)
 
 
+def _reset_stream_state() -> None:
+    _stream_state["gate_started"] = False
+    _stream_state["reply_started"] = False
+
+
+def _finish_live_line() -> None:
+    if _stream_state["gate_started"] or _stream_state["reply_started"]:
+        console.print()
+    _reset_stream_state()
+
+
 def _observer(kind: str, event: dict) -> None:
-    """Show the loop's internals live — the video's 'transparent harness' beat."""
-    if kind == "tool":
-        console.print(f"  [dim]tool · {event['tool']}({event['args']}) → {event['output'][:80]}[/dim]")
+    """Show the loop's internals live."""
+    if kind == "gate_text":
+        if not _stream_state["gate_started"]:
+            console.print("  [dim]gate raw - [/dim]", end="")
+            _stream_state["gate_started"] = True
+        console.print(Text(event.get("delta", ""), style="dim"), end="")
+        _flush()
+    elif kind == "text":
+        if not _stream_state["reply_started"]:
+            if _stream_state["gate_started"]:
+                console.print()
+                _stream_state["gate_started"] = False
+            console.print("[bold green]waku >[/bold green] ", end="")
+            _stream_state["reply_started"] = True
+        console.print(Text(event.get("delta", "")), end="")
+        _flush()
+    elif kind == "stream_fallback":
+        _finish_live_line()
+        console.print(f"  [dim]stream fallback - {event.get('reason', '')}[/dim]")
+    elif kind == "tool":
+        _finish_live_line()
+        console.print(
+            f"  [dim]tool - {event['tool']}({event['args']}) -> "
+            f"{event['output'][:80]}[/dim]"
+        )
     elif kind == "gate":
-        console.print(f"  [dim]gate · {event['decision']} — {event.get('reason','')}[/dim]")
+        _finish_live_line()
+        console.print(f"  [dim]gate - {event['decision']} - {event.get('reason', '')}[/dim]")
     elif kind == "consolidation":
-        console.print(f"  [dim]memory · consolidated {event['new_facts']} fact(s) from recent chats[/dim]")
+        _finish_live_line()
+        console.print(
+            f"  [dim]memory - consolidated {event['new_facts']} fact(s) "
+            "from recent chats[/dim]"
+        )
 
 
 def main() -> None:
     waku = Waku()
-    waku.session.session_id = "terminal"   # its own conversation thread in the inbox
+    waku.session.session_id = "terminal"
     console.print(Panel.fit(
-        "[bold]Waku[/bold] — local, yours, transparent.\n"
+        "[bold]Waku[/bold] - local, yours, transparent.\n"
         f"home: {waku.settings.home.resolve()}   model: {waku.settings.model}\n"
-        "Commands: /memory · /quit",
+        "Commands: /memory - /quit",
         border_style="cyan",
     ))
     while True:
         try:
-            user_message = console.input("[bold cyan]you ›[/bold cyan] ").strip()
+            user_message = console.input("[bold cyan]you >[/bold cyan] ").strip()
         except (EOFError, KeyboardInterrupt):
             break
         if not user_message:
@@ -79,9 +122,11 @@ def main() -> None:
                 )
             )
             continue
-        result = waku.respond(user_message, observer=_observer, source="cli")
-        console.print(f"[bold green]waku ›[/bold green] {result.reply}\n")
-    console.print("[dim]bye — your memory stays in state.db[/dim]")
+        _reset_stream_state()
+        result = waku.respond(user_message, observer=_observer, source="cli", stream=True)
+        _finish_live_line()
+        console.print(f"[bold green]waku final >[/bold green] {result.reply}\n")
+    console.print("[dim]bye - your memory stays in state.db[/dim]")
 
 
 if __name__ == "__main__":
